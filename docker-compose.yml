@@ -1,0 +1,23 @@
+version: '3.9'
+
+services:
+  fast-go:
+    image: fast-go
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    init: true
+    volumes:
+      - type: bind
+        source: .
+        target: /app/
+    networks:
+      - frontend
+      - backend
+    ports:
+      - 8080:8080
+    restart: unless-stopped
+networks:
+  frontend:
+  backend:
