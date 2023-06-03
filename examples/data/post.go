@@ -1,7 +1,5 @@
 package data
 
-import "fmt"
-
 type Post struct {
 	ID          int
 	Title       string `json:"title"`
@@ -9,7 +7,6 @@ type Post struct {
 }
 
 func (p Post) Validate() (interface{}, bool) {
-	fmt.Println("valudate", p)
 
 	if len(p.Title) < 5 {
 		return map[string]string{

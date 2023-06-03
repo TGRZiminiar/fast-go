@@ -120,21 +120,21 @@ func (e *Engine) Start() {
 	http.ListenAndServe(":"+strconv.Itoa(e.config.Port), e.router)
 }
 
-func (e *Engine) Logger(method string, path string, startTime time.Time) {
-	elapsedTime := time.Since(startTime)
-	log.Printf("%s request for path %s completed in %s", method, path, elapsedTime)
+func (e *Engine) UpdateCorsConfig(config CorsConfig) {
+	e.corsConfig = config
 }
 
 func (e *Engine) CORS(next httprouter.Handle) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		// Set the 'Access-Control-Allow-Origin' header to the origin of the client
 		// making the request instead of a wildcard '*' when withCredentials is true
-		origin := r.Header.Get("Origin")
-		if origin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-		} else {
-			w.Header().Set("Access-Control-Allow-Origin", e.corsConfig.AllowOrigins)
-		}
+		// origin := r.Header.Get("Origin")
+		// if origin != "" {
+		// 	w.Header().Set("Access-Control-Allow-Origin", origin)
+		// } else {
+		// 	w.Header().Set("Access-Control-Allow-Origin", e.corsConfig.AllowOrigins)
+		// }
+		// fmt.Println(origin)
 
 		w.Header().Set("Access-Control-Allow-Origin", e.corsConfig.AllowOrigins)
 		w.Header().Set("Access-Control-Allow-Credentials", strconv.FormatBool(e.corsConfig.AllowCredentials))
@@ -152,26 +152,40 @@ func (e *Engine) CORS(next httprouter.Handle) httprouter.Handle {
 	}
 }
 
-func handleCtxMethod(path string, w http.ResponseWriter, r *http.Request, p httprouter.Params, e *Engine, method string) (*Ctx, error) {
-	ctx := newCtx(w, r, p)
+func (e *Engine) Logger(method string, path string, startTime time.Time) {
+	elapsedTime := time.Since(startTime)
+	switch method {
+	case "GET":
+		log.Printf("\x1b[42m%s\x1b[0m request for path %s completed in %s", method, path, elapsedTime)
+	case "POST":
+		log.Printf("\x1b[43m%s\x1b[0m request for path %s completed in %s", method, path, elapsedTime)
+	case "PATCH":
+		log.Printf("\x1b[44m%s\x1b[0m request for path %s completed in %s", method, path, elapsedTime)
+	case "PUT":
+		log.Printf("\x1b[45m%s\x1b[0m request for path %s completed in %s", method, path, elapsedTime)
+	case "DELETE":
+		log.Printf("\x1b[101m%s\x1b[0m request for path %s completed in %s", method, path, elapsedTime)
+	}
+}
+
+func handleCtxMethod(path string, w http.ResponseWriter, r *http.Request, p httprouter.Params, e *Engine, method string) (*Ctx, bool, error) {
+	ctx, servedFromCache := newCtx(w, r, p)
 	if r.Method != method {
-		return nil, fmt.Errorf("method <%s> not allowed", r.Method)
+		return nil, servedFromCache, fmt.Errorf("method <%s> not allowed", r.Method)
 	}
 
-	if e.config.Logger {
-		startTime := time.Now()
-		defer e.Logger(r.Method, path, startTime)
-	}
-
-	return ctx, nil
+	return ctx, servedFromCache, nil
 
 }
-
-func (e *Engine) Get(path string, h Handler) {
+func createHandler(e *Engine, path string, h []Handler, method string) httprouter.Handle {
 
 	fn := func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		if e.config.Logger {
+			startTime := time.Now()
+			defer e.Logger(r.Method, path, startTime)
+		}
 
-		ctx, err := handleCtxMethod(path, w, r, p, e, "GET")
+		ctx, cacheServe, err := handleCtxMethod(path, w, r, p, e, method)
 		if err != nil {
 			ctx.Status(http.StatusMethodNotAllowed).JSON(map[string]string{
 				"error": err.Error(),
@@ -179,24 +193,37 @@ func (e *Engine) Get(path string, h Handler) {
 			return
 		}
 
-		h(ctx)
-
-	}
-	e.router.GET(path, e.CORS(fn))
-}
-
-func (e *Engine) Post(path string, h Handler) {
-	fn := func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		ctx, err := handleCtxMethod(path, w, r, p, e, "POST")
-		if err != nil {
-			ctx.Status(http.StatusMethodNotAllowed).JSON(map[string]string{
-				"error": err.Error(),
-			})
+		if cacheServe {
 			return
 		}
 
-		h(ctx)
-
+		for _, handler := range h {
+			handler(ctx)
+		}
 	}
-	e.router.POST(path, fn)
+
+	return e.CORS(fn)
+}
+
+func (e *Engine) Get(path string, h ...Handler) {
+	e.router.GET(path, createHandler(e, path, h, "GET"))
+}
+
+func (e *Engine) Post(path string, h ...Handler) {
+	e.router.GET(path, createHandler(e, path, h, "POST"))
+
+}
+
+func (e *Engine) Patch(path string, h ...Handler) {
+	e.router.GET(path, createHandler(e, path, h, "PATCH"))
+}
+
+func (e *Engine) Put(path string, h ...Handler) {
+	e.router.GET(path, createHandler(e, path, h, "PUT"))
+
+}
+
+func (e *Engine) Delete(path string, h ...Handler) {
+	e.router.GET(path, createHandler(e, path, h, "DELETE"))
+
 }

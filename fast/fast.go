@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/patrickmn/go-cache"
 )
 
 const (
@@ -16,20 +17,46 @@ const (
 	MultipartFormData = "multipart/form-data"
 )
 
+var (
+	cacheData *cache.Cache
+)
+
+func init() {
+	cacheData = cache.New(5*time.Minute, 10*time.Minute) // Initialize the cache
+}
+
+type CustomRequest struct {
+	*http.Request
+	Temp interface{} // Assuming Temp Variable
+}
+
 type Ctx struct {
-	w          http.ResponseWriter
-	r          *http.Request
+	W          http.ResponseWriter
+	R          *CustomRequest
 	params     httprouter.Params
 	statusCode int
 }
 
-func newCtx(w http.ResponseWriter, r *http.Request, params httprouter.Params) *Ctx {
+// func newCache() *allCache {
+//     Cache := cache.New(defaultExpiration, purgeTime)
+//     return &allCache{
+//         products: Cache,
+//     }
+// }
+
+func newCtx(w http.ResponseWriter, r *http.Request, params httprouter.Params) (*Ctx, bool) {
+	path := r.URL.Path
+	if cachedData, found := cacheData.Get(path); found {
+		w.Header().Set("Content-Type", ApplicationJSON)
+		w.Write(cachedData.([]byte))
+		return nil, true // Return an empty Ctx, as the response is served from the cache
+	}
 	return &Ctx{
-		w:          w,
-		r:          r,
+		W:          w,
+		R:          &CustomRequest{Request: r},
 		params:     params,
 		statusCode: http.StatusOK,
-	}
+	}, false
 }
 
 type Param string
@@ -53,29 +80,36 @@ func (c *Ctx) Status(s int) *Ctx {
 	return c
 }
 
-func (c *Ctx) JSON(v any) error {
-	c.w.WriteHeader(c.statusCode)
-	c.w.Header().Add("Content-Type", ApplicationJSON)
-	return json.NewEncoder(c.w).Encode(v)
-}
+func (c *Ctx) JSON(v interface{}) error {
+	c.W.Header().Set("Content-Type", ApplicationJSON)
 
-func (c *Ctx) Request() *http.Request {
-	return c.r
-}
+	// Check if the response data is already cached
+	cacheKey := c.R.URL.Path
 
-func (c *Ctx) Writer() http.ResponseWriter {
-	return c.w
+	// Generate the response data
+	jsonData, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	// Cache the response data
+	cacheData.Set(cacheKey, jsonData, cache.DefaultExpiration)
+
+	// Write the response data to the response writer
+	c.W.WriteHeader(c.statusCode)
+	c.W.Write(jsonData)
+	return nil
 }
 
 func (c *Ctx) FormValue(name string) string {
-	return c.r.FormValue(name)
+	return c.R.FormValue(name)
 }
 
 func (c *Ctx) ManyFormKeyValue(name ...string) map[string]string {
 	multiData := make(map[string]string)
 
 	for _, v := range name {
-		multiData[v] = c.r.FormValue(v)
+		multiData[v] = c.R.FormValue(v)
 	}
 
 	return multiData
@@ -84,13 +118,13 @@ func (c *Ctx) ManyFormKeyValue(name ...string) map[string]string {
 func (c *Ctx) ManyFormValue(name ...string) []string {
 	multiData := []string{}
 	for _, v := range name {
-		multiData = append(multiData, c.r.FormValue(v))
+		multiData = append(multiData, c.R.FormValue(v))
 	}
 	return multiData
 }
 
 func (c *Ctx) FormFile(name string) (multipart.File, *multipart.FileHeader, error) {
-	file, header, err := c.r.FormFile(name)
+	file, header, err := c.R.FormFile(name)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -110,18 +144,23 @@ type Cookie struct {
 	SessionOnly bool      `json:"session_only"`
 }
 
-func (c *Ctx) Cookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool) {
+func (c *Ctx) SetCookie(data http.Cookie) {
 
 	cook := &http.Cookie{
-		Name:     name,
-		Value:    value,
-		MaxAge:   maxAge,
-		Path:     path,
-		Domain:   domain,
-		Secure:   secure,
-		HttpOnly: httpOnly,
+		Name:       data.Name,
+		Value:      data.Value,
+		MaxAge:     data.MaxAge,
+		Path:       data.Path,
+		Domain:     data.Domain,
+		Secure:     data.Secure,
+		HttpOnly:   data.HttpOnly,
+		Expires:    data.Expires,
+		RawExpires: data.RawExpires,
+		SameSite:   data.SameSite,
+		Raw:        data.Raw,
+		Unparsed:   data.Unparsed,
 	}
 
-	http.SetCookie(c.w, cook)
+	http.SetCookie(c.W, cook)
 
 }

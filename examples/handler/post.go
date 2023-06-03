@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -34,24 +35,32 @@ func CreatePost(ctx *fast.Ctx) error {
 // 	// })
 // }
 
+type Post struct {
+	id int
+}
+
 func GetPost(ctx *fast.Ctx) error {
+
+	fmt.Println(ctx.R.Temp)
 
 	id := ctx.Param("id").AsInt(ctx)
 
-	cook := &http.Cookie{
+	ctx.SetCookie(http.Cookie{
 		Name:     "test",
 		Value:    "ro8BS6Hiivgzy8Xuu09JDjlNLnSLldY5",
 		Expires:  time.Now().Add(365 * 24 * time.Hour),
 		HttpOnly: false,
 		SameSite: http.SameSiteNoneMode,
 		Secure:   true,
-	}
-
-	http.SetCookie(ctx.Writer(), cook)
-
-	// ctx.Cookie()
-	return ctx.Status(200).JSON(map[string]interface{}{
-		"id": id,
-		// "cookie": cook,
 	})
+
+	return ctx.Status(200).JSON(map[string]interface{}{
+		"id":     id,
+		"cookie": ctx.W.Header().Get("Content-Type"),
+	})
+}
+func Test(ctx *fast.Ctx) error {
+
+	ctx.R.Temp = "hello"
+	return nil
 }
