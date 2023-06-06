@@ -12,7 +12,9 @@ import (
 )
 
 type Config struct {
-	Port   int
+	//Default Port : 8080
+	Port int
+	//Default Logger : true
 	Logger bool
 }
 type ErrorHandler func(*Ctx, error)
@@ -211,7 +213,6 @@ func (e *Engine) Get(path string, h ...Handler) {
 
 func (e *Engine) Post(path string, h ...Handler) {
 	e.router.GET(path, createHandler(e, path, h, "POST"))
-
 }
 
 func (e *Engine) Patch(path string, h ...Handler) {
@@ -220,10 +221,8 @@ func (e *Engine) Patch(path string, h ...Handler) {
 
 func (e *Engine) Put(path string, h ...Handler) {
 	e.router.GET(path, createHandler(e, path, h, "PUT"))
-
 }
 
 func (e *Engine) Delete(path string, h ...Handler) {
 	e.router.GET(path, createHandler(e, path, h, "DELETE"))
-
 }

@@ -30,13 +30,13 @@ func main() {
 	})
 
 	app.UpdateCorsConfig(fast.CorsConfig{
-		AllowOrigins:     "not",
+		AllowOrigins:     "*",
 		AllowCredentials: true,
 		MaxAge:           3600,
 		AllowCookies:     true,
 	})
 
-	app.Get("/post/:id/:mangaid", handler.Test, handler.GetPost)
+	app.Get("/post/:id/:mangaid", handler.UserAuth, handler.GetPost)
 	app.Post("/post", handler.CreatePost)
 
 	app.Start()

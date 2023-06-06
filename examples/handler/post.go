@@ -59,8 +59,9 @@ func GetPost(ctx *fast.Ctx) error {
 		"cookie": ctx.W.Header().Get("Content-Type"),
 	})
 }
-func Test(ctx *fast.Ctx) error {
 
-	ctx.R.Temp = "hello"
+func UserAuth(ctx *fast.Ctx) error {
+
+	ctx.R.Temp = "user"
 	return nil
 }

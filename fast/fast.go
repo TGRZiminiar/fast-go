@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"net/http"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -116,19 +117,74 @@ func (c *Ctx) ManyFormKeyValue(name ...string) map[string]string {
 }
 
 func (c *Ctx) ManyFormValue(name ...string) []string {
-	multiData := []string{}
-	for _, v := range name {
-		multiData = append(multiData, c.R.FormValue(v))
-	}
-	return multiData
+
+	multiData := make(chan string)
+	// multiData := []string{}
+
+	go func() {
+		for _, v := range name {
+			// multiData = append(multiData, c.R.FormValue(v))
+			multiData <- c.R.FormValue(v)
+		}
+		close(multiData)
+	}()
+	temp := ChanToSlice(multiData).([]string)
+	return temp
 }
 
 func (c *Ctx) FormFile(name string) (multipart.File, *multipart.FileHeader, error) {
 	file, header, err := c.R.FormFile(name)
+
 	if err != nil {
 		return nil, nil, err
 	}
 	return file, header, nil
+}
+
+type FormDataManyFile struct {
+	files   []multipart.File
+	headers []*multipart.FileHeader
+}
+
+func ChanToSlice(ch interface{}) interface{} {
+	chv := reflect.ValueOf(ch)
+	slv := reflect.MakeSlice(reflect.SliceOf(reflect.TypeOf(ch).Elem()), 0, 0)
+	for {
+		v, ok := chv.Recv()
+		if !ok {
+			return slv.Interface()
+		}
+		slv = reflect.Append(slv, v)
+	}
+}
+
+func (c *Ctx) FormManyFiles(key ...string) (FormDataManyFile, error) {
+	c.W.Header().Set("Content-Type", MultipartFormData)
+
+	var data FormDataManyFile
+	// temp := make(chan, FormDataManyFile)
+	go func() {
+		for _, v := range key {
+			file, header, err := c.R.FormFile(v)
+
+			data.files = append(data.files, file)
+			data.headers = append(data.headers, header)
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	// temp := make(chan FormDataManyFile)
+
+	// for _, v := range key {
+	// 	go func(v string){
+
+	// 	}(v)
+	// }
+
+	return data, nil
+
 }
 
 type Cookie struct {
