@@ -1,15 +1,25 @@
 package params
 
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/TGRZiminiar/based/fast"
+)
+
 type CreatePost struct {
-	Name string `formData:"name"`
+	Name string `json:"name"`
 }
 
-func (p CreatePost) Validate() (any, bool) {
+func (p CreatePost) Validate(ctx *fast.Ctx) (CreatePost, error) {
 
-	if len(p.Name) < 3 {
-		return map[string]string{
-			"title": "too short",
-		}, false
+	var params CreatePost
+	if err := json.NewDecoder(ctx.R.Body).Decode(&params); err != nil {
+		return CreatePost{}, err
 	}
-	return nil, true
+
+	if len(params.Name) < 3 {
+		return CreatePost{}, fmt.Errorf("name is too short %d", len(params.Name))
+	}
+	return params, nil
 }

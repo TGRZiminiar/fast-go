@@ -108,7 +108,6 @@ func Init(c Config) *Engine {
 	if c.Port == 0 {
 		c.Port = 8080
 	}
-
 	return &Engine{
 		router:       httprouter.New(),
 		errorHandler: func(ctx *Ctx, err error) {},
@@ -212,17 +211,17 @@ func (e *Engine) Get(path string, h ...Handler) {
 }
 
 func (e *Engine) Post(path string, h ...Handler) {
-	e.router.GET(path, createHandler(e, path, h, "POST"))
+	e.router.POST(path, createHandler(e, path, h, "POST"))
 }
 
 func (e *Engine) Patch(path string, h ...Handler) {
-	e.router.GET(path, createHandler(e, path, h, "PATCH"))
+	e.router.PATCH(path, createHandler(e, path, h, "PATCH"))
 }
 
 func (e *Engine) Put(path string, h ...Handler) {
-	e.router.GET(path, createHandler(e, path, h, "PUT"))
+	e.router.PUT(path, createHandler(e, path, h, "PUT"))
 }
 
 func (e *Engine) Delete(path string, h ...Handler) {
-	e.router.GET(path, createHandler(e, path, h, "DELETE"))
+	e.router.DELETE(path, createHandler(e, path, h, "DELETE"))
 }

@@ -38,13 +38,6 @@ type Ctx struct {
 	statusCode int
 }
 
-// func newCache() *allCache {
-//     Cache := cache.New(defaultExpiration, purgeTime)
-//     return &allCache{
-//         products: Cache,
-//     }
-// }
-
 func newCtx(w http.ResponseWriter, r *http.Request, params httprouter.Params) (*Ctx, bool) {
 	path := r.URL.Path
 	if cachedData, found := cacheData.Get(path); found {
@@ -87,7 +80,6 @@ func (c *Ctx) JSON(v interface{}) error {
 	// Check if the response data is already cached
 	cacheKey := c.R.URL.Path
 
-	// Generate the response data
 	jsonData, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -96,7 +88,6 @@ func (c *Ctx) JSON(v interface{}) error {
 	// Cache the response data
 	cacheData.Set(cacheKey, jsonData, cache.DefaultExpiration)
 
-	// Write the response data to the response writer
 	c.W.WriteHeader(c.statusCode)
 	c.W.Write(jsonData)
 	return nil
@@ -108,10 +99,18 @@ func (c *Ctx) FormValue(name string) string {
 
 func (c *Ctx) ManyFormKeyValue(name ...string) map[string]string {
 	multiData := make(map[string]string)
+	// c.R.ParseForm()
 
+	// test := make(map[string](chan string))
+
+	// go func() {
 	for _, v := range name {
 		multiData[v] = c.R.FormValue(v)
+		// test[v] <- c.R.FormValue(v)
 	}
+	// }()
+
+	// temp := ChanToSlice(test).(map[string]string)
 
 	return multiData
 }
@@ -120,7 +119,6 @@ func (c *Ctx) ManyFormValue(name ...string) []string {
 
 	multiData := make(chan string)
 	// multiData := []string{}
-
 	go func() {
 		for _, v := range name {
 			// multiData = append(multiData, c.R.FormValue(v))
@@ -133,17 +131,17 @@ func (c *Ctx) ManyFormValue(name ...string) []string {
 }
 
 func (c *Ctx) FormFile(name string) (multipart.File, *multipart.FileHeader, error) {
+
+	// c.R.ParseForm()
+
 	file, header, err := c.R.FormFile(name)
 
 	if err != nil {
 		return nil, nil, err
 	}
-	return file, header, nil
-}
+	defer file.Close()
 
-type FormDataManyFile struct {
-	files   []multipart.File
-	headers []*multipart.FileHeader
+	return file, header, nil
 }
 
 func ChanToSlice(ch interface{}) interface{} {
@@ -158,46 +156,27 @@ func ChanToSlice(ch interface{}) interface{} {
 	}
 }
 
-func (c *Ctx) FormManyFiles(key ...string) (FormDataManyFile, error) {
-	c.W.Header().Set("Content-Type", MultipartFormData)
+func (c *Ctx) FormManyFiles(key ...string) ([]*multipart.FileHeader, error) {
 
-	var data FormDataManyFile
-	// temp := make(chan, FormDataManyFile)
+	c.R.ParseMultipartForm(32 << 20)
+
+	fhs := c.R.MultipartForm.File["files"]
+	if len(fhs) == 0 {
+		return nil, fmt.Errorf("no value in this key")
+	}
+	multiFile := make(chan *multipart.FileHeader)
+
 	go func() {
-		for _, v := range key {
-			file, header, err := c.R.FormFile(v)
-
-			data.files = append(data.files, file)
-			data.headers = append(data.headers, header)
-			if err != nil {
-				return
-			}
+		for _, fh := range fhs {
+			multiFile <- fh
 		}
+		close(multiFile)
 	}()
 
-	// temp := make(chan FormDataManyFile)
+	temp := ChanToSlice(multiFile).([]*multipart.FileHeader)
 
-	// for _, v := range key {
-	// 	go func(v string){
+	return temp, nil
 
-	// 	}(v)
-	// }
-
-	return data, nil
-
-}
-
-type Cookie struct {
-	Name        string    `json:"name"`
-	Value       string    `json:"value"`
-	Path        string    `json:"path"`
-	Domain      string    `json:"domain"`
-	MaxAge      int       `json:"max_age"`
-	Expires     time.Time `json:"expires"`
-	Secure      bool      `json:"secure"`
-	HTTPOnly    bool      `json:"http_only"`
-	SameSite    string    `json:"same_site"`
-	SessionOnly bool      `json:"session_only"`
 }
 
 func (c *Ctx) SetCookie(data http.Cookie) {
@@ -216,7 +195,15 @@ func (c *Ctx) SetCookie(data http.Cookie) {
 		Raw:        data.Raw,
 		Unparsed:   data.Unparsed,
 	}
-
 	http.SetCookie(c.W, cook)
 
+}
+
+func (c *Ctx) DeleteCookie(cookieName string) {
+	http.SetCookie(c.W, &http.Cookie{
+		Name:   cookieName,
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
+	})
 }
